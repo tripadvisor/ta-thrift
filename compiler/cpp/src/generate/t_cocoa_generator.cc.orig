@@ -208,7 +208,6 @@ class t_cocoa_generator : public t_oop_generator {
 
   std::string cocoa_prefix_;
   std::string constants_declarations_;
-  std::string constants_declarations_additions_;
 
   /**
    * File streams
@@ -304,7 +303,6 @@ void t_cocoa_generator::close_generator()
   // stick our constants declarations at the end of the header file
   // since they refer to things we are defining.
   f_header_ << constants_declarations_ << endl;
-  
 }
 
 /**
@@ -361,35 +359,6 @@ void t_cocoa_generator::generate_enum(t_enum* tenum) {
  */
 void t_cocoa_generator::generate_consts(std::vector<t_const*> consts) {
   std::ostringstream const_interface;
-
-  // create static const variable for each non-container structs
-  vector<t_const*>::iterator c_iter;
-  for (c_iter = consts.begin(); c_iter != consts.end(); ++c_iter) {
-
-    string name = (*c_iter)->get_name();
-    t_type* type = (*c_iter)->get_type();
-	
-		bool is_string = false;
-		if (type->is_base_type()) {
-			t_base_type::t_base tbase = ((t_base_type*)type)->get_base();
-			if (tbase == t_base_type::TYPE_STRING) {
-				is_string = true;
-			}
-		}
-    
-    if (!type->is_container() && !type->is_struct() && !is_string) {
-      const_interface << 
-      "static const " << type_name(type) << " " << cocoa_prefix_ << name << " = " << 
-      render_const_value(f_header_, type, (*c_iter)->get_value()) << ";" << endl;
-    } else {
-      //const_interface << "static " << type_name(type) << " " << cocoa_prefix_ << name << ";" << endl;
-    }
-	// since these are appearing in the header file, we supress the llvm unused warning
-	//const_interface << "#pragma unused(" << cocoa_prefix_ << name << ")" << endl;
-  }
-  const_interface << endl;
-
-
   string constants_class_name = cocoa_prefix_ + program_name_ + "Constants";
 
   const_interface << "@interface " << constants_class_name << " : NSObject ";
@@ -397,17 +366,12 @@ void t_cocoa_generator::generate_consts(std::vector<t_const*> consts) {
   scope_down(const_interface);
 
   // getter method for each constant defined.
+  vector<t_const*>::iterator c_iter;
   for (c_iter = consts.begin(); c_iter != consts.end(); ++c_iter) {
     string name = (*c_iter)->get_name();
     t_type* type = (*c_iter)->get_type();
-
-    if (!type->is_container() && !type->is_struct()) {
-      const_interface <<
-      "+ (const " << type_name(type) << ") " << name << ";" << endl;
-    } else {
-      const_interface <<
+    const_interface <<
       "+ (" << type_name(type) << ") " << name << ";" << endl;
-    }
   }
 
   const_interface << "@end";
@@ -415,31 +379,18 @@ void t_cocoa_generator::generate_consts(std::vector<t_const*> consts) {
   // this gets spit into the header file in ::close_generator
   constants_declarations_ = const_interface.str();
 
-  // static variables in the .m hold struct, container, and string constant values
+  // static variables in the .m hold all constant values
   for (c_iter = consts.begin(); c_iter != consts.end(); ++c_iter) {
     string name = (*c_iter)->get_name();
     t_type* type = (*c_iter)->get_type();
-		
-		bool is_string = false;
-		if (type->is_base_type()) {
-			t_base_type::t_base tbase = ((t_base_type*)type)->get_base();
-			if (tbase == t_base_type::TYPE_STRING) {
-				is_string = true;
-			}
-		}
-		
-		if (type->is_container() || type->is_struct()) {
-		    f_impl_ <<
-		      "static " << type_name(type) << " " << cocoa_prefix_ << name;
-			f_impl_ << ";" << endl;
-		} else if (is_string) {
-	      f_impl_ << 
-	      "static const " << type_name(type) << " " << cocoa_prefix_ << name << " = " << 
-	      render_const_value(f_impl_, type, (*c_iter)->get_value()) << ";" << endl;
-		}
+    f_impl_ <<
+      "static " << type_name(type) << " " << cocoa_prefix_ << name;
+    if (!type->is_container() && !type->is_struct()) {
+      f_impl_ << " = " << render_const_value(f_impl_, type, (*c_iter)->get_value());
+    }
+    f_impl_ << ";" << endl;
   }
   f_impl_ << endl;
-	
 
   f_impl_ << "@implementation " << constants_class_name << endl;
 
@@ -464,12 +415,8 @@ void t_cocoa_generator::generate_consts(std::vector<t_const*> consts) {
   for (c_iter = consts.begin(); c_iter != consts.end(); ++c_iter) {
     string name = (*c_iter)->get_name();
     t_type* type = (*c_iter)->get_type();
-    if (!type->is_container() && !type->is_struct()) {
-      f_impl_ << "+ (const " << type_name(type) << ") " << name;
-    } else {
-      f_impl_ << "+ (" << type_name(type) << ") " << name;
-    }
-
+    f_impl_ <<
+      "+ (" << type_name(type) << ") " << name;
     scope_up(f_impl_);
     indent(f_impl_) << "return " << cocoa_prefix_ << name << ";" << endl;
     scope_down(f_impl_);
