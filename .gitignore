@@ -263,4 +263,4 @@ gen-*
 .pydevproject
 *.swp
 *.egg-info
-test-driver
+/test-driver
